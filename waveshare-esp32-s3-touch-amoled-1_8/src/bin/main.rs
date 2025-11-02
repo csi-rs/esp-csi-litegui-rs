@@ -346,7 +346,6 @@ async fn main(spawner: Spawner) {
             static EXECUTOR: StaticCell<Executor> = StaticCell::new();
             let executor = EXECUTOR.init(Executor::new());
             executor.run(|spawner| {
-                // spawner.spawn(touch_task(touch)).ok();
                 spawner.spawn(display_task(display)).ok();
             });
         })
@@ -503,7 +502,7 @@ async fn display_task(mut display_driver: Sh8601Driver<Ws18AmoledDriver, DummyRe
     let col_count = HEATMAP_EFFECTIVE_WIDTH / column_width;
     let mut current_col: u32 = 0;
 
-    // Enter loop for heatmap updates
+    // Loop for heatmap updates
     loop {
         if let Some(new_mode) = display_watch.try_changed() {
             if new_mode != current_display_mode {
@@ -673,7 +672,7 @@ async fn csi_task(
 
                 unwrap_phase(&mut phase);
 
-                // Select valid subcarriers, skipping DC (index 32)
+                // Select valid subcarriers
                 let mut valid_phase: [f32; VALID_SUBCARRIER_COUNT] = [0.0; VALID_SUBCARRIER_COUNT];
                 valid_phase[0..26].copy_from_slice(&phase[6..32]);
                 valid_phase[26..52].copy_from_slice(&phase[33..59]);
@@ -720,7 +719,7 @@ async fn csi_task(
                     valid_index += 1;
                 }
 
-                // Select valid subcarriers, skipping DC (index 32)
+                // Select valid subcarriers
                 let mut valid_amplitude: [f32; VALID_SUBCARRIER_COUNT] =
                     [0.0; VALID_SUBCARRIER_COUNT];
                 valid_amplitude[0..26].copy_from_slice(&amplitude[6..32]);
