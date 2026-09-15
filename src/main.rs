@@ -69,16 +69,10 @@
 //!
 //! ### Common commands
 //!
-//! LilyGo T4-S3 + default ESP-NOW mode:
+//! LilyGo T4-S3 + the default sniffer mode:
 //!
 //! ```bash
 //! cargo run --release --features="lilygo-t4"
-//! ```
-//!
-//! LilyGo T4-S3 + ESP-NOW mode:
-//!
-//! ```bash
-//! cargo run --release --features="lilygo-t4,mode-now"
 //! ```
 //!
 //! Waveshare + station mode:
@@ -99,17 +93,12 @@
 //! cargo run --release --features="lilygo-t4,mode-ap"
 //! ```
 //!
-//! Waveshare + fast ESP-NOW collector mode:
-//!
-//! ```bash
-//! cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-fast"
-//! ```
-//!
 //! ## Beginner tips
 //!
 //! - Start with station mode first; it is usually the easiest mode to validate.
 //! - Check serial logs for the selected board and CSI mode.
-//! - If the display stays blank in ESP-NOW/sniffer mode, verify peer/channel setup.
+//! - If the display stays blank in sniffer mode, check that something is transmitting on
+//!   `CSI_CHANNEL` — an `emitter` board is the usual companion.
 //! - Use touch gestures to switch between magnitude and phase views.
 
 #![no_std]
@@ -119,7 +108,7 @@ use core::ptr::addr_of_mut;
 use embassy_executor::Spawner;
 use esp_bootloader_esp_idf::esp_app_desc;
 use esp_csi_rs::logging::logging::{LogMode, auto_log_backend_label, init_logger};
-use esp_csi_rs::{CSINode, CSINodeClient, CollectorMode, NodeHardware, WifiApConfig, WifiSnifferConfig, WifiStationConfig, config::CsiConfig, log_ln, set_csi_logging_enabled};
+use esp_csi_rs::{CSINode, CSINodeClient, NodeHardware, WifiApConfig, WifiSnifferConfig, WifiStationConfig, config::CsiConfig, log_ln, set_csi_logging_enabled};
 use esp_hal::dma_buffers;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{
@@ -369,12 +358,7 @@ async fn main(spawner: Spawner) {
     let mut node = match CSI_OPERATION_MODE {
         CsiOperationMode::Sniffer => {
             let sniffer_config = WifiSnifferConfig::default().with_channel(CSI_CHANNEL);
-            CSINode::new_collector(
-                CollectorMode::Sniffer(sniffer_config),
-                Some(CsiConfig::default()),
-                Some(1000),
-                csi_hardware,
-            )
+            CSINode::sniffer(sniffer_config, Some(CsiConfig::default()), csi_hardware)
         }
         CsiOperationMode::Station => {
             let client_config = StationConfig::default()
@@ -383,8 +367,8 @@ async fn main(spawner: Spawner) {
                 .with_auth_method(esp_radio::wifi::AuthenticationMethod::Wpa2Personal);
 
             let station_config = WifiStationConfig::new(client_config);
-            CSINode::new_collector(
-                CollectorMode::Station(station_config),
+            CSINode::station(
+                station_config,
                 Some(CsiConfig::default()),
                 Some(1000),
                 csi_hardware,
@@ -396,8 +380,8 @@ async fn main(spawner: Spawner) {
                 .with_channel(CSI_CHANNEL);
             // Defaults: AP 192.168.13.1, single lease .2, DHCP server on.
             let ap_config = WifiApConfig::new(ap_radio_config, CSI_CHANNEL, None);
-            CSINode::new_collector(
-                CollectorMode::AccessPoint(ap_config),
+            CSINode::access_point(
+                ap_config,
                 Some(CsiConfig::default()),
                 Some(AP_PING_RATE_HZ),
                 csi_hardware,

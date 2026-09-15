@@ -95,7 +95,7 @@ static_cell = { version = "2.1.1" }
 embassy-sync = { version = "0.8.0" }
 esp-sync = { version = "0.2.1" }
 embassy-futures = { version = "0.1.2" }
-esp-csi-rs = { version = "0.9", default-features = false }
+esp-csi-rs = { version = "0.11", default-features = false }
 # Required by esp-csi-rs's `log_ln!` macro: its async-logging arm expands to a
 # bare `log::info!`, which resolves in the calling crate.
 log = "0.4.29"
@@ -130,8 +130,9 @@ panic = "abort"
 
 [profile.release.package."*"]
 opt-level = 3
-# The emitter/collector API is not on crates.io yet. Remove once
-# esp-csi-rs 0.10 / esp-csi-rs-core 0.2 are published.
+# esp-csi-rs 0.11 (the node model) is not on crates.io yet. Drop this once it publishes.
+#
+# `esp-csi-rs-core` is gone from here: that crate was deprecated and folded back into `esp-csi-rs`,
+# so patching it pinned a dependency this build no longer has.
 [patch.crates-io]
-esp-csi-rs = { git = "https://github.com/csi-rs/esp-csi-rs.git", branch = "feat/emitter-collector" }
-esp-csi-rs-core = { git = "https://github.com/csi-rs/esp-csi-rs-core.git", branch = "feat/emitter-collector" }
+esp-csi-rs = { path = "../esp-csi-rs" }
