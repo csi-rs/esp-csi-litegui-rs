@@ -45,11 +45,11 @@ Enable exactly one:
 
 ### CSI Mode Features
 
-This board is always a **collector** — it renders a CSI heatmap, so it needs CSI to render. The modes differ only in where the measurable frames come from.
+This board always runs in the **collector** collection mode — it renders a CSI heatmap, so it needs CSI to render (see the esp-csi-rs [network model](https://github.com/csi-rs/esp-csi-rs/blob/main/docs/network-model.md) for how operational mode, network role and collection mode fit together). The modes differ only in where the measurable frames come from.
 
 - mode-snf (default) — promiscuous capture on a locked channel. Needs no peer configuration.
 - mode-sta — associate to an AP and capture CSI from that link.
-- mode-ap — softAP collector: the board runs an AP (SSID `esp-csi-ap`) with a built-in DHCP server and pings the associated station; CSI is captured from its uplink replies.
+- mode-ap — softAP: the board runs an AP (SSID `esp-csi-ap`) with a built-in DHCP server and pings the associated station; CSI is captured from its uplink replies.
 
 Rules:
 - mode-snf is enabled by default.
@@ -57,13 +57,13 @@ Rules:
 - You can enable an override mode without disabling defaults.
 
 Pairing notes:
-- mode-snf: pair with an **emitter** board running the esp-csi-rs `ht20_emitter` or `ht40_emitter` example on the same channel (this app uses channel 1; the examples default to 7 — change one side to match). An emitter sounds the channel with raw injected frames and needs no association, so nothing has to be configured on this side beyond the channel. Ambient traffic on the channel is also captured.
-- mode-ap: any Wi-Fi station joining `esp-csi-ap` works (e.g. the esp-csi-rs `wifi_station` example); clients get a 192.168.13.x lease from the built-in DHCP server, and CSI flows once a station associates.
+- mode-snf: pair with a board running the esp-csi-rs `emitter` example (the Emitter operational mode, a central listener) on the same channel (this app uses channel 1; the example defaults to 7 — change one side to match). An emitter sounds the channel with meaningless frames (raw-injected on the ESP32-C5/C6, ESP-NOW broadcasts on other chips) and needs no association, so nothing has to be configured on this side beyond the channel. Ambient traffic on the channel is also captured.
+- mode-ap: any Wi-Fi station joining `esp-csi-ap` works (e.g. the esp-csi-rs `station` example); clients get a 192.168.13.x lease from the built-in DHCP server, and CSI flows once a station associates.
 
 ### Logging/Debug Features (optional)
 - println
-- async-print — force non-blocking async logging (no longer implied by jtag-serial as of esp-csi-rs 0.8; the default `auto` feature already picks the async drain at runtime when USB-Serial-JTAG is active)
-- defmt — esp-csi-rs 0.8 registers its own rzcobs-encoded defmt global logger
+- async-print — force non-blocking async logging (not implied by jtag-serial; the default `auto` feature already picks the async drain at runtime when USB-Serial-JTAG is active)
+- defmt — esp-csi-rs registers its own rzcobs-encoded defmt global logger
 - external-defmt-logger — use your own defmt global logger instead
 - jtag-serial — force the JTAG transport
 - uart — force the UART transport (do not combine with async-print)
@@ -72,7 +72,7 @@ Pairing notes:
 
 ### 1. Clone and enter project
 ```bash
-git clone <repo-url>
+git clone https://github.com/csi-rs/esp-csi-litegui-rs
 cd esp-csi-litegui-rs
 ```
 
@@ -111,12 +111,12 @@ Waveshare + explicit sniffer mode:
 cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-snf"
 ```
 
-LilyGo + softAP collector mode:
+LilyGo + softAP mode:
 ```bash
 cargo run --release --features="lilygo-t4,mode-ap"
 ```
 
-Waveshare + softAP collector mode:
+Waveshare + softAP mode:
 ```bash
 cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-ap"
 ```

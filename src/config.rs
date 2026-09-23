@@ -40,12 +40,12 @@ impl DisplayMode {
 #[allow(dead_code)]
 pub enum CsiOperationMode {
     /// Passive promiscuous capture on a locked channel. Pairs with an emitter
-    /// board (esp-csi-rs `ht20_emitter` / `ht40_emitter`) on the same channel,
+    /// board (the esp-csi-rs `emitter` example) on the same channel,
     /// and also picks up ambient traffic.
     Sniffer,
     /// Associate to an AP and capture CSI from the frames received on that link.
     Station,
-    /// Self-contained softAP collector: this board runs an AP + DHCP server and
+    /// Self-contained softAP: this board runs an AP + DHCP server and
     /// pings the leased station; CSI is captured from its uplink echo replies.
     AccessPoint,
 }
@@ -74,13 +74,13 @@ pub const CSI_OPERATION_MODE: CsiOperationMode = CsiOperationMode::AccessPoint;
 /// mismatch is silent and looks like "no packets are arriving".
 pub const CSI_CHANNEL: u8 = 1;
 
-/// SSID broadcast by the softAP collector in `AccessPoint` mode. Matches
-/// the upstream esp-csi-rs `wifi_ap` example so an unmodified upstream
-/// `wifi_station` peer pairs out of the box.
+/// SSID broadcast by the softAP in `AccessPoint` mode. Matches
+/// the upstream esp-csi-rs `access_point` example so an unmodified upstream
+/// `station` peer pairs out of the box.
 pub const AP_SSID: &str = "esp-csi-ap";
 
 /// ICMP ping rate (Hz) toward the leased station in `WifiAccessPoint` mode;
-/// each echo reply is an uplink frame captured as CSI. The upstream `wifi_ap`
+/// each echo reply is an uplink frame captured as CSI. The upstream `access_point`
 /// example uses 4000; 1000 matches the traffic rate this app already uses in
 /// the other modes. Tune up if the heatmap needs more frames.
 pub const AP_PING_RATE_HZ: u16 = 1000;

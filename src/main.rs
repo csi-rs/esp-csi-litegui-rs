@@ -2,7 +2,7 @@
 //!
 //! `esp-csi-litegui-rs` is a Rust `no_std` firmware application that visualizes
 //! Wi-Fi Channel State Information (CSI) on supported ESP32-S3 AMOLED boards.
-//! It uses [`esp-csi-rs`](https://github.com/Connected-Motion-Research/esp-csi-rs)
+//! It uses [`esp-csi-rs`](https://github.com/csi-rs/esp-csi-rs)
 //! for CSI collection and [`embedded-graphics`](https://github.com/embedded-graphics-rs/embedded-graphics)
 //! for rendering.
 //!
@@ -40,19 +40,20 @@
 //!
 //! ### CSI mode features
 //!
-//! This board is always a *collector* — it renders a CSI heatmap, so it needs
-//! CSI to render. The three modes differ only in where the measurable frames
-//! come from:
+//! This board always runs in the *collector* collection mode — it renders a CSI
+//! heatmap, so it needs CSI to render (see the esp-csi-rs
+//! [network model](https://github.com/csi-rs/esp-csi-rs/blob/main/docs/network-model.md)).
+//! The three modes differ only in where the measurable frames come from:
 //!
 //! - `mode-snf` (default): promiscuous capture on a locked channel. Needs no peer
-//!   configuration. Pair with an emitter board running the esp-csi-rs
-//!   `ht20_emitter` / `ht40_emitter` example on the same channel, or just point it
-//!   at ambient traffic.
+//!   configuration. Pair with a board running the esp-csi-rs `emitter` example
+//!   (the Emitter operational mode) on the same channel, or just point it at
+//!   ambient traffic.
 //! - `mode-sta`: associate to an AP and capture CSI from that link.
-//! - `mode-ap`: SoftAP collector — this board runs an AP (SSID `esp-csi-ap`) with a
+//! - `mode-ap`: SoftAP — this board runs an AP (SSID `esp-csi-ap`) with a
 //!   built-in DHCP server and pings the associated station; CSI is captured from
 //!   its uplink replies. Pair with any Wi-Fi station, e.g. the esp-csi-rs
-//!   `wifi_station` example.
+//!   `station` example.
 //!
 //! Notes:
 //!
@@ -87,7 +88,7 @@
 //! cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-snf"
 //! ```
 //!
-//! LilyGo + softAP collector mode:
+//! LilyGo + softAP mode:
 //!
 //! ```bash
 //! cargo run --release --features="lilygo-t4,mode-ap"

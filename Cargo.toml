@@ -7,6 +7,7 @@ description  = "No-std CSI heatmap GUI firmware for ESP32 boards with AMOLED dis
 license      = "Apache-2.0"
 repository   = "https://github.com/csi-rs/esp-csi-litegui-rs"
 readme       = "README.md"
+publish      = false
 keywords     = ["esp32", "wifi", "csi", "embedded", "no-std"]
 categories   = ["embedded", "no-std"]
 
@@ -23,9 +24,9 @@ auto = ["esp-csi-rs/auto"]
 
 ## Debugging Features
 ## Force non-blocking async logging regardless of runtime backend detection.
-## (No longer implied by `jtag-serial` as of esp-csi-rs 0.8.)
+## (Not implied by `jtag-serial`.)
 async-print = ["esp-csi-rs/async-print"]
-## Enable logging via defmt. esp-csi-rs 0.8 registers its own rzcobs-encoded
+## Enable logging via defmt. esp-csi-rs registers its own rzcobs-encoded
 ## defmt global logger (it no longer enables `esp-println/defmt-espflash`).
 defmt = [
     "esp-csi-rs/defmt",
@@ -60,11 +61,9 @@ waveshare-esp32-s3-touch-amoled-1_8 = [
 ## Only one override mode may be enabled at a time.
 mode-sta = []
 mode-snf = []
-## SoftAP CSI collector: this board runs an AP + DHCP server and an ICMP flood;
+## SoftAP CSI capture: this board runs an AP + DHCP server and an ICMP flood;
 ## CSI is captured from the associated station's uplink frames.
 mode-ap = []
-## Fast one-to-one ESP-NOW collector: RX-only capture of a peer
-## `esp_now_fast_source`'s forced-MCS7 unicast flood.
 
 [dependencies]
 esp-bootloader-esp-idf = "0.5.0"
