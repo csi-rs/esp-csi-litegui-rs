@@ -44,27 +44,35 @@ Enable exactly one:
 - waveshare-esp32-s3-touch-amoled-1_8
 
 ### CSI Mode Features
-- mode-now (default)
-- mode-sta
-- mode-snf
+
+This board always runs in the **collector** collection mode — it renders a CSI heatmap, so it needs CSI to render (see the esp-csi-rs [network model](https://github.com/csi-rs/esp-csi-rs/blob/main/docs/network-model.md) for how operational mode, network role and collection mode fit together). The modes differ only in where the measurable frames come from.
+
+- mode-snf (default) — promiscuous capture on a locked channel. Needs no peer configuration.
+- mode-sta — associate to an AP and capture CSI from that link.
+- mode-ap — softAP: the board runs an AP (SSID `esp-csi-ap`) with a built-in DHCP server and pings the associated station; CSI is captured from its uplink replies.
 
 Rules:
-- mode-now is enabled by default.
-- mode-sta and mode-snf cannot both be enabled.
-- You can enable mode-sta or mode-snf without disabling defaults.
+- mode-snf is enabled by default.
+- Only one of mode-sta / mode-ap can be enabled.
+- You can enable an override mode without disabling defaults.
+
+Pairing notes:
+- mode-snf: pair with a board running the esp-csi-rs `emitter` example (the Emitter operational mode, a central listener) on the same channel (this app uses channel 1; the example defaults to 7 — change one side to match). An emitter sounds the channel with meaningless frames (raw-injected on the ESP32-C5/C6, ESP-NOW broadcasts on other chips) and needs no association, so nothing has to be configured on this side beyond the channel. Ambient traffic on the channel is also captured.
+- mode-ap: any Wi-Fi station joining `esp-csi-ap` works (e.g. the esp-csi-rs `station` example); clients get a 192.168.13.x lease from the built-in DHCP server, and CSI flows once a station associates.
 
 ### Logging/Debug Features (optional)
 - println
-- async-print
-- defmt
-- jtag-serial
-- uart
+- async-print — force non-blocking async logging (not implied by jtag-serial; the default `auto` feature already picks the async drain at runtime when USB-Serial-JTAG is active)
+- defmt — esp-csi-rs registers its own rzcobs-encoded defmt global logger
+- external-defmt-logger — use your own defmt global logger instead
+- jtag-serial — force the JTAG transport
+- uart — force the UART transport (do not combine with async-print)
 
 ## Build and Run
 
 ### 1. Clone and enter project
 ```bash
-git clone <repo-url>
+git clone https://github.com/csi-rs/esp-csi-litegui-rs
 cd esp-csi-litegui-rs
 ```
 
@@ -73,14 +81,9 @@ Update SSID and password in src/main.rs where ClientConfig is created.
 
 ### 3. Build/run examples
 
-LilyGo + default mode-now:
+LilyGo + default sniffer mode:
 ```bash
 cargo run --release --features="lilygo-t4"
-```
-
-LilyGo + explicit mode-now:
-```bash
-cargo run --release --features="lilygo-t4,mode-now"
 ```
 
 LilyGo + station mode:
@@ -88,19 +91,14 @@ LilyGo + station mode:
 cargo run --release --features="lilygo-t4,mode-sta"
 ```
 
-LilyGo + sniffer mode:
+LilyGo + explicit sniffer mode:
 ```bash
 cargo run --release --features="lilygo-t4,mode-snf"
 ```
 
-Waveshare + default mode-now:
+Waveshare + default sniffer mode:
 ```bash
 cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8"
-```
-
-Waveshare + explicit mode-now:
-```bash
-cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-now"
 ```
 
 Waveshare + station mode:
@@ -108,9 +106,19 @@ Waveshare + station mode:
 cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-sta"
 ```
 
-Waveshare + sniffer mode:
+Waveshare + explicit sniffer mode:
 ```bash
 cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-snf"
+```
+
+LilyGo + softAP mode:
+```bash
+cargo run --release --features="lilygo-t4,mode-ap"
+```
+
+Waveshare + softAP mode:
+```bash
+cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-ap"
 ```
 
 ## Gesture Behavior

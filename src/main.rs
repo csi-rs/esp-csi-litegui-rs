@@ -2,7 +2,7 @@
 //!
 //! `esp-csi-litegui-rs` is a Rust `no_std` firmware application that visualizes
 //! Wi-Fi Channel State Information (CSI) on supported ESP32-S3 AMOLED boards.
-//! It uses [`esp-csi-rs`](https://github.com/Connected-Motion-Research/esp-csi-rs)
+//! It uses [`esp-csi-rs`](https://github.com/csi-rs/esp-csi-rs)
 //! for CSI collection and [`embedded-graphics`](https://github.com/embedded-graphics-rs/embedded-graphics)
 //! for rendering.
 //!
@@ -40,16 +40,26 @@
 //!
 //! ### CSI mode features
 //!
-//! - `mode-sta`: Wi-Fi station mode CSI collection.
-//! - `mode-now`: ESP-NOW mode CSI collection.
-//! - `mode-snf`: Wi-Fi sniffer mode CSI collection.
+//! This board always runs in the *collector* collection mode — it renders a CSI
+//! heatmap, so it needs CSI to render (see the esp-csi-rs
+//! [network model](https://github.com/csi-rs/esp-csi-rs/blob/main/docs/network-model.md)).
+//! The three modes differ only in where the measurable frames come from:
+//!
+//! - `mode-snf` (default): promiscuous capture on a locked channel. Needs no peer
+//!   configuration. Pair with a board running the esp-csi-rs `emitter` example
+//!   (the Emitter operational mode) on the same channel, or just point it at
+//!   ambient traffic.
+//! - `mode-sta`: associate to an AP and capture CSI from that link.
+//! - `mode-ap`: SoftAP — this board runs an AP (SSID `esp-csi-ap`) with a
+//!   built-in DHCP server and pings the associated station; CSI is captured from
+//!   its uplink replies. Pair with any Wi-Fi station, e.g. the esp-csi-rs
+//!   `station` example.
 //!
 //! Notes:
 //!
-//! - `mode-now` is enabled by default.
-//! - You can safely override default mode by enabling `mode-sta` or `mode-snf`
-//!   without disabling default features.
-//! - `mode-sta` and `mode-snf` cannot be enabled together.
+//! - `mode-snf` is the default; enabling `mode-sta` or `mode-ap` overrides it
+//!   without needing to disable default features.
+//! - Only one of `mode-sta` / `mode-ap` can be enabled at a time.
 //!
 //! ## Quick start
 //!
@@ -60,16 +70,10 @@
 //!
 //! ### Common commands
 //!
-//! LilyGo T4-S3 + default ESP-NOW mode:
+//! LilyGo T4-S3 + the default sniffer mode:
 //!
 //! ```bash
 //! cargo run --release --features="lilygo-t4"
-//! ```
-//!
-//! LilyGo T4-S3 + ESP-NOW mode:
-//!
-//! ```bash
-//! cargo run --release --features="lilygo-t4,mode-now"
 //! ```
 //!
 //! Waveshare + station mode:
@@ -84,11 +88,18 @@
 //! cargo run --release --features="waveshare-esp32-s3-touch-amoled-1_8,mode-snf"
 //! ```
 //!
+//! LilyGo + softAP mode:
+//!
+//! ```bash
+//! cargo run --release --features="lilygo-t4,mode-ap"
+//! ```
+//!
 //! ## Beginner tips
 //!
 //! - Start with station mode first; it is usually the easiest mode to validate.
 //! - Check serial logs for the selected board and CSI mode.
-//! - If the display stays blank in ESP-NOW/sniffer mode, verify peer/channel setup.
+//! - If the display stays blank in sniffer mode, check that something is transmitting on
+//!   `CSI_CHANNEL` — an `emitter` board is the usual companion.
 //! - Use touch gestures to switch between magnitude and phase views.
 
 #![no_std]
@@ -97,8 +108,8 @@
 use core::ptr::addr_of_mut;
 use embassy_executor::Spawner;
 use esp_bootloader_esp_idf::esp_app_desc;
-use esp_csi_rs::logging::logging::{LogMode, init_logger};
-use esp_csi_rs::{CSINode, CSINodeClient, CSINodeHardware, CollectionMode, EspNowConfig, WifiSnifferConfig, WifiStationConfig, config::CsiConfig, log_ln, set_csi_logging_enabled};
+use esp_csi_rs::logging::logging::{LogMode, auto_log_backend_label, init_logger};
+use esp_csi_rs::{CSINode, CSINodeClient, NodeHardware, WifiApConfig, WifiSnifferConfig, WifiStationConfig, config::CsiConfig, log_ln, set_csi_logging_enabled};
 use esp_hal::dma_buffers;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{
@@ -122,10 +133,12 @@ use static_cell::StaticCell;
 use cst226_rs::{CST226_DEVICE_ADDRESS, Cst226Driver};
 #[cfg(feature = "waveshare-esp32-s3-touch-amoled-1_8")]
 use ft3x68_rs::{FT3168_DEVICE_ADDRESS, Ft3x68Driver};
+use esp_radio::wifi::PowerSaveMode;
+use esp_radio::wifi::ap::AccessPointConfig;
 use esp_radio::wifi::sta::StationConfig;
 
 use crate::alloc::string::ToString;
-use config::{BOARD_NAME, CSI_CHANNEL, CSI_OPERATION_MODE, CsiOperationMode, DISPLAY_SIZE, FB_SIZE};
+use config::{AP_PING_RATE_HZ, AP_SSID, BOARD_NAME, CSI_CHANNEL, CSI_OPERATION_MODE, CsiOperationMode, DISPLAY_SIZE, FB_SIZE};
 use csi_task::configure_node_radio;
 #[cfg(feature = "lilygo-t4")]
 use gesture_task::display_gesture_runner;
@@ -172,6 +185,7 @@ async fn main(spawner: Spawner) {
     // `csi_task` first awaits `get_csi_data()` (which flips mode to `Async`)
     // would otherwise be dumped to UART.
     set_csi_logging_enabled(false);
+    log_ln!("Log backend: {}", auto_log_backend_label());
     log_ln!("Board profile: {}", BOARD_NAME);
 
     esp_alloc::heap_allocator!(size: 61 * 1024);
@@ -330,52 +344,47 @@ async fn main(spawner: Spawner) {
     esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
     // Initialize WiFi Controller
-    // PowerSaveMode defaults to None in esp-radio 0.18, so no explicit override needed.
     let config_radio = esp_radio::wifi::ControllerConfig::default();
     let (wifi_controller, mut interfaces) =
         esp_radio::wifi::new(peripherals.WIFI, config_radio)
             .expect("Failed to initialize Wi-Fi controller");
 
     let controller = WIFI_CONTROLLER.init(wifi_controller);
+    let _ = controller.set_power_saving(PowerSaveMode::None);
 
     log_ln!("WiFi Controller Initialized");
 
-    // Create a CSINodeHardware instance which will be used by the CSINode to interact with the Wi-Fi hardware
-    let csi_hardware = CSINodeHardware::new(&mut interfaces, controller);
+    // Hardware bundle the node uses to drive the Wi-Fi radio.
+    let csi_hardware = NodeHardware::new(&mut interfaces, controller);
     let mut node = match CSI_OPERATION_MODE {
-        CsiOperationMode::WifiStation => {
+        CsiOperationMode::Sniffer => {
+            let sniffer_config = WifiSnifferConfig::default().with_channel(CSI_CHANNEL);
+            CSINode::sniffer(sniffer_config, Some(CsiConfig::default()), csi_hardware)
+        }
+        CsiOperationMode::Station => {
             let client_config = StationConfig::default()
                 .with_ssid("SSID")
                 .with_password("PASS".to_string())
                 .with_auth_method(esp_radio::wifi::AuthenticationMethod::Wpa2Personal);
 
-                let station_config = WifiStationConfig { client_config };
-            CSINode::new(
-                esp_csi_rs::Node::Central(esp_csi_rs::CentralOpMode::WifiStation(station_config)),
-                CollectionMode::Collector,
+            let station_config = WifiStationConfig::new(client_config);
+            CSINode::station(
+                station_config,
                 Some(CsiConfig::default()),
                 Some(1000),
-                csi_hardware
+                csi_hardware,
             )
         }
-        CsiOperationMode::EspNow => CSINode::new(
-            esp_csi_rs::Node::Central(esp_csi_rs::CentralOpMode::EspNow(
-                EspNowConfig::default().with_channel(CSI_CHANNEL),
-            )),
-            CollectionMode::Collector,
-            Some(CsiConfig::default()),
-            Some(1000),
-            csi_hardware,
-        ),
-        CsiOperationMode::WifiSniffer => {
-            let sniffer_config = WifiSnifferConfig::default().with_channel(CSI_CHANNEL);
-            CSINode::new(
-                esp_csi_rs::Node::Peripheral(esp_csi_rs::PeripheralOpMode::WifiSniffer(
-                    sniffer_config,
-                )),
-                CollectionMode::Collector,
+        CsiOperationMode::AccessPoint => {
+            let ap_radio_config = AccessPointConfig::default()
+                .with_ssid(AP_SSID)
+                .with_channel(CSI_CHANNEL);
+            // Defaults: AP 192.168.13.1, single lease .2, DHCP server on.
+            let ap_config = WifiApConfig::new(ap_radio_config, CSI_CHANNEL, None);
+            CSINode::access_point(
+                ap_config,
                 Some(CsiConfig::default()),
-                Some(1000),
+                Some(AP_PING_RATE_HZ),
                 csi_hardware,
             )
         }

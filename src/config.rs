@@ -39,35 +39,51 @@ impl DisplayMode {
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
 pub enum CsiOperationMode {
-    /// Station mode CSI, typically using an AP link.
-    WifiStation,
-    /// ESP-NOW based CSI collection.
-    EspNow,
-    /// Passive Wi-Fi sniffer CSI collection.
-    WifiSniffer,
+    /// Passive promiscuous capture on a locked channel. Pairs with an emitter
+    /// board (the esp-csi-rs `emitter` example) on the same channel,
+    /// and also picks up ambient traffic.
+    Sniffer,
+    /// Associate to an AP and capture CSI from the frames received on that link.
+    Station,
+    /// Self-contained softAP: this board runs an AP + DHCP server and
+    /// pings the leased station; CSI is captured from its uplink echo replies.
+    AccessPoint,
 }
 
-#[cfg(all(feature = "mode-sta", feature = "mode-snf"))]
-compile_error!(
-    "Enable only one override mode: 'mode-sta' or 'mode-snf'"
-);
+#[cfg(all(feature = "mode-sta", feature = "mode-ap"))]
+compile_error!("Enable only one mode: 'mode-snf', 'mode-sta' or 'mode-ap'");
 
 /// Selected CSI operating mode derived from Cargo features.
-#[cfg(feature = "mode-snf")]
-pub const CSI_OPERATION_MODE: CsiOperationMode = CsiOperationMode::WifiSniffer;
+///
+/// Sniffer is the default because it needs no peer configuration: point it at a
+/// channel and it captures whatever is there, including an emitter board's
+/// sounding frames.
+#[cfg(all(not(feature = "mode-sta"), not(feature = "mode-ap")))]
+pub const CSI_OPERATION_MODE: CsiOperationMode = CsiOperationMode::Sniffer;
 
 /// Selected CSI operating mode derived from Cargo features.
-#[cfg(all(not(feature = "mode-snf"), feature = "mode-sta"))]
-pub const CSI_OPERATION_MODE: CsiOperationMode = CsiOperationMode::WifiStation;
+#[cfg(feature = "mode-sta")]
+pub const CSI_OPERATION_MODE: CsiOperationMode = CsiOperationMode::Station;
 
 /// Selected CSI operating mode derived from Cargo features.
-#[cfg(all(not(feature = "mode-snf"), not(feature = "mode-sta")))]
-pub const CSI_OPERATION_MODE: CsiOperationMode = CsiOperationMode::EspNow;
+#[cfg(all(not(feature = "mode-sta"), feature = "mode-ap"))]
+pub const CSI_OPERATION_MODE: CsiOperationMode = CsiOperationMode::AccessPoint;
 
-/// 2.4 GHz channel (1–14) used for CSI capture in `EspNow` and `WifiSniffer`
-/// modes. Both this device and the transmitting peer MUST be on the same
-/// channel — a mismatch is silent and looks like "no packets are arriving".
+/// 2.4 GHz channel (1–14) used for CSI capture in `Sniffer` and `AccessPoint`
+/// modes. This device and the transmitting peer MUST be on the same channel — a
+/// mismatch is silent and looks like "no packets are arriving".
 pub const CSI_CHANNEL: u8 = 1;
+
+/// SSID broadcast by the softAP in `AccessPoint` mode. Matches
+/// the upstream esp-csi-rs `access_point` example so an unmodified upstream
+/// `station` peer pairs out of the box.
+pub const AP_SSID: &str = "esp-csi-ap";
+
+/// ICMP ping rate (Hz) toward the leased station in `WifiAccessPoint` mode;
+/// each echo reply is an uplink frame captured as CSI. The upstream `access_point`
+/// example uses 4000; 1000 matches the traffic rate this app already uses in
+/// the other modes. Tune up if the heatmap needs more frames.
+pub const AP_PING_RATE_HZ: u16 = 1000;
 
 // According to documentation the acquired array from ESP is an LLTF array with subcarriers ordered as follows: [0 to 31,-32 to -1]
 // There are several formats depending on supported training algortihim
